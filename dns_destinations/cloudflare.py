@@ -4,6 +4,9 @@ import requests
 
 from dns_destinations.dns_destination import DnsDestination
 from utils.config_parser import Account, Destination
+from utils.logging import get_app_logger
+
+logger = get_app_logger(__name__)
 
 
 class Cloudflare(DnsDestination):
@@ -40,17 +43,26 @@ class Cloudflare(DnsDestination):
         def create_new_dns_record() -> bool:
             url: str = f"https://api.cloudflare.com/client/v4/zones/{account.zone_id}/dns_records"
             response: dict = requests.post(url, headers=headers, json=body).json()
-            return response.get("success", False)
+            success: bool = response.get("success", False)
+            if not success:
+                logger.warning(response)
+            return success
 
         def update_existing_dns_record(record_id: str) -> bool:
             url: str = f"https://api.cloudflare.com/client/v4/zones/{account.zone_id}/dns_records/{record_id}"
             response: dict = requests.put(url, headers=headers, json=body).json()
-            return response.get("success", False)
+            success: bool = response.get("success", False)
+            if not success:
+                logger.warning(response)
+            return success
 
+        logger.debug("Checking for existing DNS record in Cloudflare")
         existing_record_id: str | None = get_existing_record_id()
         if existing_record_id:
+            logger.debug(f"Updating existing record {record_type} {name} -> {ip}")
             success: bool = update_existing_dns_record(existing_record_id)
         else:
+            logger.debug(f"No existing record found. Creating a new one {record_type} {name} -> {ip}")
             success: bool = create_new_dns_record()
 
         return success
